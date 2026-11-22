@@ -1,0 +1,55 @@
+name: Publish W152D stable kernel packages
+on:
+  push:
+    branches: [w152d-kernel-release]
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-26.04-arm
+    steps:
+      - name: Download the successful W152D kernel build
+        uses: actions/download-artifact@v4
+        with:
+          name: w152d-linux-6.12-kernel
+          run-id: 44996296955
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: kernel-artifact
+      - name: Verify the W152D build and prepare the ophub release layout
+        run: |
+          set -euo pipefail
+          version=6.12.118
+          mkdir -p verify publish
+          tar -xf "kernel-artifact/$version-ophub.tar.gz" -C verify
+          tar -xf "kernel-artifact/deb-$version-ophub.tar.gz" -C verify
+          mv "verify/$version-ophub" "verify/$version"
+          mv "verify/deb-$version-ophub" "verify/deb-$version"
+          (
+            cd "verify/$version"
+            sha256sum -c sha256sums
+            tar -tzf dtb-amlogic-6.12.118-ophub.tar.gz > dtb-list
+            grep -Eq '(^|/)meson-gxlx4-w152d\.dtb$' dtb-list
+            tar -tzf modules-6.12.118-ophub.tar.gz > modules-list
+            grep -Eq '(^|/)sprdwl_ng\.ko(\.[a-z0-9]+)?$' modules-list
+            rm -- dtb-list modules-list
+          )
+          (cd "verify/deb-$version" && sha256sum -c sha256sums)
+          tar -czf "publish/$version.tar.gz" -C verify "$version"
+          tar -czf "publish/deb-$version.tar.gz" -C verify "deb-$version"
+      - name: Upload Kernel to Release
+        uses: Zlion-Y/upload-to-releases@af7efd63a4b5e5edd715b304ebdbe0572fa06619
+        with:
+          tag: kernel_w152d
+          name: W152D Linux 6.12.118 kernel packages
+          artifacts: publish/*.tar.gz
+          allow_updates: true
+          remove_artifacts: false
+          replaces_artifacts: true
+          make_latest: false
+          prerelease: true
+          gh_token: ${{ secrets.GITHUB_TOKEN }}
+          body: |
+            Kernel packages from [the successful W152D 6.12 build](https://github.com/Zlion-Y/kernel/actions/runs/44996296955).
+            The outer archive layout matches ophub's kernel release convention for the W152D image rebuild.
