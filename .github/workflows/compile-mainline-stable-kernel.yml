@@ -104,7 +104,7 @@ jobs:
               ${api_url} |
               jq -r '.object.sha'
           )
-          [[ "${source_hash}" == "2945c88f3a714472ef93992beccb427d0d1593d3" ]] || { echo "Unexpected kernel source: ${source_hash}"; exit 1; }
+          [[ "${source_hash}" == "0ccb3da22809375b7edd2d64918bb5411deb30a0" ]] || { echo "Unexpected kernel source: ${source_hash}"; exit 1; }
           echo "source_hash=${source_hash}" >> ${GITHUB_ENV}
           echo "status=success" >> ${GITHUB_OUTPUT}
 
