@@ -4,104 +4,13 @@
 # Copyright (C) 2021 https://github.com/ophub/kernel
 #==========================================================================
 
-name: Compile mainline stable kernel
+name: W152D stable 6.12 test build
 
 on:
-  repository_dispatch:
+  push:
+    branches:
+      - w152d-6.12-build
   workflow_dispatch:
-    inputs:
-      kernel_source:
-        description: "Select the kernel source"
-        required: false
-        default: "ophub"
-        type: choice
-        options:
-          - unifreq
-          - ophub
-      kernel_version:
-        description: "Select kernel version"
-        required: false
-        default: "6.18.y"
-        type: choice
-        options:
-          - all
-          - 5.10.y
-          - 5.15.y
-          - 6.1.y
-          - 6.6.y
-          - 6.12.y
-          - 6.18.y
-      kernel_auto:
-        description: "Auto use the latest kernel"
-        required: false
-        default: true
-        type: boolean
-      delete_source:
-        description: "Delete source after compilation"
-        required: false
-        default: true
-        type: boolean
-      kernel_package:
-        description: "Select compile package list"
-        required: false
-        default: "all"
-        type: choice
-        options:
-          - all
-          - dtbs
-      kernel_toolchain:
-        description: "Select the compilation toolchain"
-        required: false
-        default: "gcc"
-        type: choice
-        options:
-          - clang
-          - gcc
-          - gcc-15.3.rel2
-          - gcc-15.3
-          - gcc-15.2
-          - gcc-14.3
-          - gcc-14.2
-      ccache_clear:
-        description: "Set whether to clear the cache"
-        required: false
-        default: false
-        type: boolean
-      docker_image:
-        description: "Select Armbian docker image"
-        required: false
-        default: "resolute"
-        type: choice
-        options:
-          - trixie
-          - bookworm
-          - resolute
-          - noble
-      kernel_sign:
-        description: "Set the kernel custom signature"
-        required: false
-        default: "-ophub"
-        type: choice
-        options:
-          - -ophub
-          - -happy-new-year
-          - -dragon-boat-festival
-          - -mid-autumn-festival
-          - -happy-national-day
-          - -merry-christmas
-          - -spring-plowing
-          - -summer-growing
-          - -autumn-harvesting
-          - -winter-storing
-          - -yourname
-      kernel_config:
-        description: "Set the path of kernel .config"
-        required: false
-        default: "kernel-config/release/stable"
-        type: choice
-        options:
-          - kernel-config/release/stable
-          - false
 
 env:
   TZ: Etc/UTC
@@ -115,10 +24,10 @@ jobs:
       - name: Set build matrix based on kernel_version input
         id: set-matrix
         run: |
-          if [[ "${{ inputs.kernel_version }}" == "all" ]]; then
+          if [[ "6.12.y" == "all" ]]; then
             MATRIX='{"include":[{"kernel_version":"5.10.y"},{"kernel_version":"5.15.y"},{"kernel_version":"6.1.y"},{"kernel_version":"6.6.y"},{"kernel_version":"6.12.y"},{"kernel_version":"6.18.y"}]}'
           else
-            MATRIX='{"include":[{"kernel_version":"${{ inputs.kernel_version }}"}]}'
+            MATRIX='{"include":[{"kernel_version":"6.12.y"}]}'
           fi
           echo "matrix=${MATRIX}" >> "${GITHUB_OUTPUT}"
 
@@ -127,7 +36,7 @@ jobs:
     runs-on: ubuntu-26.04-arm
     if: ${{ github.event.repository.owner.id == github.event.sender.id }}
     permissions:
-      contents: write
+      contents: read
 
     strategy:
       fail-fast: false
@@ -188,14 +97,14 @@ jobs:
         id: kernelhash
         run: |
           # Get the latest source hash from the kernel repository
-          api_url="https://api.github.com/repos/${{ inputs.kernel_source }}/linux-${{ matrix.kernel_version }}/git/ref/heads/main"
+          api_url="https://api.github.com/repos/Zlion-Y/linux-6.12.y/git/ref/heads/w152d-gxlx4-build"
           source_hash=$(curl -fsSL -m 20 \
               -H "Accept: application/vnd.github+json" \
               -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
               ${api_url} |
               jq -r '.object.sha'
           )
-          [[ -z "${source_hash}" || "${source_hash}" == "null" ]] && source_hash="${{ github.sha }}"
+          [[ "${source_hash}" == "2945c88f3a714472ef93992beccb427d0d1593d3" ]] || { echo "Unexpected kernel source: ${source_hash}"; exit 1; }
           echo "source_hash=${source_hash}" >> ${GITHUB_ENV}
           echo "status=success" >> ${GITHUB_OUTPUT}
 
@@ -203,43 +112,31 @@ jobs:
         uses: actions/cache@v5
         with:
           path: /builder/ccache
-          key: kernel-stable-${{ inputs.kernel_toolchain }}-${{ matrix.kernel_version }}-${{ env.source_hash }}
+          key: kernel-stable-gcc-${{ matrix.kernel_version }}-${{ env.source_hash }}
           restore-keys: |
-            kernel-stable-${{ inputs.kernel_toolchain }}-${{ matrix.kernel_version }}-
+            kernel-stable-gcc-${{ matrix.kernel_version }}-
 
       - name: Compile the kernel [ ${{ matrix.kernel_version }} ]
-        uses: ophub/amlogic-s9xxx-armbian@main
+        uses: ophub/amlogic-s9xxx-armbian@f816cfcca674a312985cb76271c9d28753d6dd76
         if: ${{ steps.disk.outputs.status == 'success' && !cancelled() }}
         with:
           build_target: kernel
-          kernel_source: ${{ inputs.kernel_source }}
+          kernel_source: Zlion-Y/linux-6.12.y@w152d-gxlx4-build
           kernel_version: ${{ matrix.kernel_version }}
-          kernel_auto: ${{ inputs.kernel_auto }}
-          delete_source: ${{ inputs.delete_source }}
-          kernel_package: ${{ inputs.kernel_package }}
-          kernel_toolchain: ${{ inputs.kernel_toolchain }}
-          kernel_sign: ${{ inputs.kernel_sign }}
-          kernel_config: ${{ inputs.kernel_config }}
-          ccache_clear: ${{ inputs.ccache_clear }}
+          kernel_auto: true
+          delete_source: true
+          kernel_package: all
+          kernel_toolchain: gcc
+          kernel_sign: -ophub
+          kernel_config: kernel-config/release/stable
+          ccache_clear: false
           docker_hostpath: /builder
-          docker_image: ophub/armbian-${{ inputs.docker_image }}:arm64
+          docker_image: ophub/armbian-resolute:arm64
 
-      - name: Upload Kernel to Release
-        uses: ophub/upload-to-releases@main
+      - name: Upload W152D kernel test packages
         if: ${{ env.PACKAGED_STATUS == 'success' && !cancelled() }}
+        uses: actions/upload-artifact@v4
         with:
-          tag: kernel_stable
-          artifacts: ${{ env.PACKAGED_OUTPUTPATH }}/*
-          allow_updates: true
-          remove_artifacts: false
-          replaces_artifacts: true
-          make_latest: true
-          gh_token: ${{ secrets.GITHUB_TOKEN }}
-          body: |
-            - These are Mainline `stable` kernels that provide support for `Armbian`, `OpenWrt` and `FnNAS`.
-            - It works with most `Amlogic`, `Rockchip`, and `Allwinner` devices. For specific details, please refer to the instructions on the homepage of each system's repository.
-
-            <br />
-
-            - 这些是主线稳定内核，为 `Armbian`、`OpenWrt` 和 `FnNAS` 提供支持。
-            - 适用于 `amlogic`，`rockchip`，`allwinner` 的大部分设备，具体可以参考各系统仓库首页的说明。
+          name: w152d-linux-6.12-kernel
+          path: ${{ env.PACKAGED_OUTPUTPATH }}/*
+          if-no-files-found: error
